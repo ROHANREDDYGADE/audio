@@ -9,6 +9,7 @@ import whisper
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = 'uploads'
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max-limit
+model = whisper.load_model("base")
 
 # Create uploads directory if it doesn't exist
 if not os.path.exists(app.config['UPLOAD_FOLDER']):
@@ -114,6 +115,9 @@ def convert_adpcm_to_pcm(input_file_path):
     return output_header + pcm_data.tobytes()
 
 
+# Load the Whisper model once at the start of the application
+model = whisper.load_model("base")
+
 @app.route('/upload', methods=['POST'])
 def upload_file():
     if 'audio' not in request.files:
@@ -140,8 +144,7 @@ def upload_file():
             with open(output_path, 'wb') as f:
                 f.write(pcm_data)
 
-            # Transcribe with Whisper
-            model = whisper.load_model("base")
+            # Use the preloaded Whisper model for transcription
             result = model.transcribe(output_path, language="en")
             transcription = result.get("text", "")
 
@@ -156,6 +159,7 @@ def upload_file():
 
         except Exception as e:
             return jsonify({'error': str(e)}), 500
+
 
 @app.route('/audio/<filename>')
 def get_audio(filename):
