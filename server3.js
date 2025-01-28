@@ -12,8 +12,18 @@ const port = 8001;
 app.use(morgan('dev'));
 
 // Increase payload size limit
+const express = require('express');
+
+
+// Optimize for large file uploads
 app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ limit: '50mb', extended: true }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+
+
+
+// Enable compression
+const compression = require('compression');
+app.use(compression());
 
 // Configure storage for uploaded files
 const storage = multer.diskStorage({
@@ -32,9 +42,13 @@ const storage = multer.diskStorage({
 const upload = multer({ 
     storage: storage,
     limits: {
-        fileSize: 10 * 1024 * 1024 // 10MB limit
-    }
+        fileSize: 10 * 1024 * 1024, // 10MB limit
+        files: 1
+    },
+    buffer: true
 });
+const compression = require('compression');
+app.use(compression());
 
 // Enable CORS
 app.use((req, res, next) => {
