@@ -39,7 +39,7 @@ class ADPCMDecoder:
         self.step_index = 0
 
     def decode_sample(self, code):
-        step = step_table[self.step_index]
+        step = int(step_table[self.step_index])  # Convert to int for higher precision
         predictor = self.predictor
 
         # Compute difference
@@ -57,7 +57,7 @@ class ADPCMDecoder:
         else:
             predictor += difference
 
-        # Clamp predictor to 16 bits
+        # Clamp predictor to 16-bit range
         predictor = max(-32768, min(32767, predictor))
         self.predictor = predictor
 
@@ -68,7 +68,7 @@ class ADPCMDecoder:
         return predictor
 
     def decode(self, adpcm_data):
-        pcm_data = np.zeros(len(adpcm_data) * 2, dtype=np.int16)
+        pcm_data = np.zeros(len(adpcm_data) * 2, dtype=np.int16)  # Final output as int16
         pcm_offset = 0
 
         for byte in adpcm_data:
@@ -80,6 +80,7 @@ class ADPCMDecoder:
             pcm_offset += 1
 
         return pcm_data
+
 
 def convert_adpcm_to_pcm(input_file_path):
     with open(input_file_path, 'rb') as f:
