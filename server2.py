@@ -148,13 +148,14 @@ def upload_file():
                 transcription = "failed to transcribe"
 
             print(f"Transcription: {transcription}")  # Print transcription to console
+            return transcription
 
-            return jsonify({
-                'message': 'File uploaded, converted, and transcribed successfully',
-                'originalFile': filename,
-                'pcmFile': output_filename,
-                'transcription': transcription
-            })
+            # return jsonify({
+            #     'message': 'File uploaded, converted, and transcribed successfully',
+            #     'originalFile': filename,
+            #     'pcmFile': output_filename,
+            #     'transcription': transcription
+            # })
 
         except Exception as e:
             return jsonify({'error': str(e)}), 500
