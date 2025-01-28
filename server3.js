@@ -11,8 +11,6 @@ const port = 8001;
 // Add logging middleware
 app.use(morgan('dev'));
 
-// Increase payload size limit
-const express = require('express');
 
 
 // Optimize for large file uploads
