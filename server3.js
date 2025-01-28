@@ -19,9 +19,7 @@ app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 
 
-// Enable compression
-const compression = require('compression');
-app.use(compression());
+
 
 // Configure storage for uploaded files
 const storage = multer.diskStorage({
