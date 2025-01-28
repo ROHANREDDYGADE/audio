@@ -1,17 +1,20 @@
+# server.py
 from flask import Flask, request, send_file, jsonify
-import os
 from werkzeug.utils import secure_filename
-from pydub import AudioSegment
-import wave
-import struct
-import io
+import numpy as np
+import os
+from io import BytesIO
 
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = 'uploads'
-app.config['ALLOWED_EXTENSIONS'] = {'wav'}
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max-limit
+
+# Create uploads directory if it doesn't exist
+if not os.path.exists(app.config['UPLOAD_FOLDER']):
+    os.makedirs(app.config['UPLOAD_FOLDER'])
 
 # ADPCM decoding tables (same as ESP32)
-stepTable = [
+step_table = np.array([
     7, 8, 9, 10, 11, 12, 13, 14,
     16, 17, 19, 21, 23, 25, 28, 31,
     34, 37, 41, 45, 50, 55, 60, 66,
@@ -24,21 +27,20 @@ stepTable = [
     7132, 7845, 8630, 9493, 10442, 11487, 12635, 13899,
     15289, 16818, 18500, 20350, 22385, 24623, 27086, 29794,
     32767
-]
+], dtype=np.int16)
 
-indexTable = [
+index_table = np.array([
     -1, -1, -1, -1, 2, 4, 6, 8,
     -1, -1, -1, -1, 2, 4, 6, 8
-]
-
+], dtype=np.int8)
 
 class ADPCMDecoder:
-    def __init__(self):
+    def _init_(self):
         self.predictor = 0
-        self.stepIndex = 0
+        self.step_index = 0
 
-    def decodeSample(self, code):
-        step = stepTable[self.stepIndex]
+    def decode_sample(self, code):
+        step = step_table[self.step_index]
         predictor = self.predictor
 
         # Compute difference
@@ -57,121 +59,101 @@ class ADPCMDecoder:
             predictor += difference
 
         # Clamp predictor to 16 bits
-        predictor = min(32767, max(-32768, predictor))
+        predictor = max(-32768, min(32767, predictor))
         self.predictor = predictor
 
         # Update step index
-        self.stepIndex += indexTable[code]
-        self.stepIndex = min(88, max(0, self.stepIndex))
+        self.step_index += index_table[code]
+        self.step_index = max(0, min(88, self.step_index))
 
         return predictor
 
-    def decode(self, adpcmData):
-        pcmData = []
-        for i in range(0, len(adpcmData), 2):
-            byte = adpcmData[i]
+    def decode(self, adpcm_data):
+        pcm_data = np.zeros(len(adpcm_data) * 2, dtype=np.int16)
+        pcm_offset = 0
+
+        for byte in adpcm_data:
             # Decode high nibble
-            pcmData.append(self.decodeSample((byte >> 4) & 0x0F))
+            pcm_data[pcm_offset] = self.decode_sample((byte >> 4) & 0x0F)
+            pcm_offset += 1
             # Decode low nibble
-            pcmData.append(self.decodeSample(byte & 0x0F))
-        return pcmData
+            pcm_data[pcm_offset] = self.decode_sample(byte & 0x0F)
+            pcm_offset += 1
 
+        return pcm_data
 
-def allowed_file(filename):
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() in app.config['ALLOWED_EXTENSIONS']
-
-
-def convert_adpcm_to_pcm(adpcm_data):
+def convert_adpcm_to_pcm(input_file_path):
+    with open(input_file_path, 'rb') as f:
+        # Read WAV header
+        header = bytearray(f.read(44))
+        
+        # Read ADPCM data
+        adpcm_data = np.frombuffer(f.read(), dtype=np.uint8)
+    
+    # Create decoder and convert data
     decoder = ADPCMDecoder()
     pcm_data = decoder.decode(adpcm_data)
-
-    # Create a WAV file in PCM format
-    output = io.BytesIO()
-    with wave.open(output, 'wb') as wav_file:
-        wav_file.setnchannels(1)  # Mono
-        wav_file.setsampwidth(2)  # 2 bytes per sample (16-bit)
-        wav_file.setframerate(16000)  # 16kHz sample rate
-        wav_file.writeframes(struct.pack('<' + 'h' * len(pcm_data), *pcm_data))
-    output.seek(0)
-    return output
-
-
-@app.route('/')
-def index():
-    return """
-        <html>
-        <body>
-            <h1>Upload ADPCM Audio</h1>
-            <form action="/upload" method="post" enctype="multipart/form-data">
-                <input type="file" name="audio" accept=".wav">
-                <input type="submit">
-            </form>
-        </body>
-        </html>
-    """
-
+    
+    # Create new WAV header for PCM format
+    output_header = bytearray(44)
+    output_header[0:4] = b'RIFF'
+    output_header[8:12] = b'WAVE'
+    output_header[12:16] = b'fmt '
+    output_header[16:20] = (16).to_bytes(4, 'little')  # Subchunk1Size
+    output_header[20:22] = (1).to_bytes(2, 'little')   # AudioFormat (PCM)
+    output_header[22:24] = (1).to_bytes(2, 'little')   # NumChannels
+    output_header[24:28] = (16000).to_bytes(4, 'little')  # SampleRate
+    output_header[28:32] = (32000).to_bytes(4, 'little')  # ByteRate
+    output_header[32:34] = (2).to_bytes(2, 'little')    # BlockAlign
+    output_header[34:36] = (16).to_bytes(2, 'little')   # BitsPerSample
+    output_header[36:40] = b'data'
+    output_header[40:44] = len(pcm_data.tobytes()).to_bytes(4, 'little')  # Subchunk2Size
+    
+    return output_header + pcm_data.tobytes()
 
 @app.route('/upload', methods=['POST'])
 def upload_file():
     if 'audio' not in request.files:
-        return 'No file part', 400
+        return jsonify({'error': 'No file part'}), 400
+    
     file = request.files['audio']
     if file.filename == '':
-        return 'No selected file', 400
-    if file and allowed_file(file.filename):
+        return jsonify({'error': 'No selected file'}), 400
+
+    if file:
         filename = secure_filename(file.filename)
-        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-        file.save(filepath)
+        input_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        file.save(input_path)
 
-        # Convert the ADPCM audio to PCM
-        with open(filepath, 'rb') as f:
-            adpcm_data = bytearray(f.read())
-            pcm_audio = convert_adpcm_to_pcm(adpcm_data)
+        try:
+            # Convert ADPCM to PCM
+            pcm_data = convert_adpcm_to_pcm(input_path)
+            
+            # Save converted file
+            output_filename = filename.replace('.wav', '_pcm.wav')
+            output_path = os.path.join(app.config['UPLOAD_FOLDER'], output_filename)
+            
+            with open(output_path, 'wb') as f:
+                f.write(pcm_data)
 
-        pcm_filename = filename.replace('.wav', '_pcm.wav')
-        pcm_filepath = os.path.join(app.config['UPLOAD_FOLDER'], pcm_filename)
+            return jsonify({
+                'message': 'File uploaded and converted successfully',
+                'originalFile': filename,
+                'pcmFile': output_filename
+            })
 
-        # Save PCM file
-        with open(pcm_filepath, 'wb') as f:
-            f.write(pcm_audio.read())
-
-        return jsonify({
-            'message': 'File uploaded and converted successfully',
-            'originalFile': filename,
-            'pcmFile': pcm_filename
-        })
-    else:
-        return 'Invalid file format. Please upload a WAV file.', 400
-
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
 
 @app.route('/audio/<filename>')
 def get_audio(filename):
-    file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-    if os.path.exists(file_path):
-        return send_file(file_path)
-    else:
-        return 'File not found', 404
-
-
-@app.route('/recordings')
-def list_recordings():
-    recordings = []
-    for filename in os.listdir(app.config['UPLOAD_FOLDER']):
-        if filename.endswith('.wav'):
-            file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-            pcm_filename = filename.replace('.wav', '_pcm.wav')
-            pcm_file_path = os.path.join(app.config['UPLOAD_FOLDER'], pcm_filename)
-            recordings.append({
-                'name': filename,
-                'pcmName': pcm_filename,
-                'originalSize': os.path.getsize(file_path),
-                'pcmSize': os.path.getsize(pcm_file_path) if os.path.exists(pcm_file_path) else 0,
-                'timestamp': os.path.getmtime(file_path)
-            })
-    return jsonify(recordings)
-
+    try:
+        return send_file(
+            os.path.join(app.config['UPLOAD_FOLDER'], filename),
+            mimetype='audio/wav'
+        )
+    except Exception:
+        return jsonify({'error': 'File not found'}), 404
 
 if __name__ == '__main__':
-    if not os.path.exists(app.config['UPLOAD_FOLDER']):
-        os.makedirs(app.config['UPLOAD_FOLDER'])
     app.run(host='0.0.0.0', port=8001)
