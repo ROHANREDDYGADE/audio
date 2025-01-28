@@ -151,9 +151,9 @@ def upload_file():
             # return transcription
 
             response_data = {
-                'message': 'File uploaded, converted, and transcribed successfully',
-                'originalFile': filename,
-                'pcmFile': output_filename,
+                # 'message': 'File uploaded, converted, and transcribed successfully',
+                # 'originalFile': filename,
+                # 'pcmFile': output_filename,
                 'transcription': transcription
             }
 
