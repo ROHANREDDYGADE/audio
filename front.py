@@ -80,7 +80,7 @@ def get_latest_recordings():
     
     # Sort by creation time (newest first) and limit to 10
     recordings.sort(key=lambda x: x['created'], reverse=True)
-    return jsonify(recordings[:10])
+    return jsonify(recordings[:50])
 
 @app.route('/')
 def index():
