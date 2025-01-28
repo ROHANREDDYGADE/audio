@@ -143,6 +143,8 @@ def upload_file():
             
             result = model.transcribe(output_path, task="translate")
             transcription = result.get("text", "")
+            if transcription == "":
+                transcription = "failed to transcribe"
 
             print(f"Transcription: {transcription}")  # Print transcription to console
 
