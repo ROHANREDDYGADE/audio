@@ -141,7 +141,7 @@ def upload_file():
 
             # Transcribe with Whisper
             
-            result = model.transcribe(output_path, language="en")
+            result = model.transcribe(output_path, task="translate")
             transcription = result.get("text", "")
 
             print(f"Transcription: {transcription}")  # Print transcription to console
