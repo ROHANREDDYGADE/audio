@@ -1,4 +1,3 @@
-# server.py
 from flask import Flask, request, send_file, jsonify
 from werkzeug.utils import secure_filename
 import numpy as np
@@ -35,7 +34,7 @@ index_table = np.array([
 ], dtype=np.int8)
 
 class ADPCMDecoder:
-    def _init_(self):
+    def __init__(self):
         self.predictor = 0
         self.step_index = 0
 
@@ -156,4 +155,4 @@ def get_audio(filename):
         return jsonify({'error': 'File not found'}), 404
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=8001)
+    app.run(host='0.0.0.0', port=8001, debug=True)
