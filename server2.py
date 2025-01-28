@@ -161,9 +161,9 @@ def upload_file():
             response = jsonify(response_data)
 
             # Log the size of the response
-            response_data_size = len(response.get_data())
-            print(f"Response size: {response_data_size} bytes")
-            print("response = ",response)
+            # response_data_size = len(response.get_data())
+            # print(f"Response size: {response_data_size} bytes")
+            # print("response = ",response)
 
             return response
 
