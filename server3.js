@@ -49,17 +49,26 @@ app.use((req, res, next) => {
 });
 
 // Health check endpoint
-app.get('/health', (req, res) => {
-    res.json({ status: 'ok', timestamp: new Date() });
+app.post('/health', (req, res) => {
+    console.log('Received health check');
+    res.json({ 
+        status: 'ok', 
+        timestamp: new Date(),
+        message: 'Server is ready to receive audio uploads'
+    });
 });
 
-// Route to handle file uploads
+
+
+// Also update your upload endpoint to log more details
 app.post('/upload', upload.single('audio'), (req, res) => {
     console.log('Received upload request');
-    console.log('Headers:', req.headers);
+    console.log('Headers:', JSON.stringify(req.headers, null, 2));
+    console.log('Body size:', req.headers['content-length']);
     
     if (!req.file) {
-        console.log('No file received');
+        console.log('No file in request');
+        console.log('Body:', req.body);
         return res.status(400).send('No file uploaded.');
     }
 
@@ -75,6 +84,7 @@ app.post('/upload', upload.single('audio'), (req, res) => {
         size: req.file.size
     });
 });
+
 
 // Route to list all recordings
 app.get('/recordings', (req, res) => {
@@ -181,12 +191,13 @@ app.get('/', (req, res) => {
 app.use('/uploads', express.static('uploads'));
 
 // Error handling middleware
+// Add better error handling
 app.use((err, req, res, next) => {
-    console.error('Error:', err);
+    console.error('Error occurred:', err);
     res.status(500).json({
         error: 'Internal Server Error',
         message: err.message
-    });
+    });
 });
 
 app.listen(port, '0.0.0.0', () => {
