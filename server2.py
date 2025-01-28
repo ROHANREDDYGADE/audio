@@ -148,14 +148,24 @@ def upload_file():
                 transcription = "failed to transcribe"
 
             print(f"Transcription: {transcription}")  # Print transcription to console
-            return transcription
+            # return transcription
 
-            # return jsonify({
-            #     'message': 'File uploaded, converted, and transcribed successfully',
-            #     'originalFile': filename,
-            #     'pcmFile': output_filename,
-            #     'transcription': transcription
-            # })
+            response_data = {
+                'message': 'File uploaded, converted, and transcribed successfully',
+                'originalFile': filename,
+                'pcmFile': output_filename,
+                'transcription': transcription
+            }
+
+            # Create JSON response
+            response = jsonify(response_data)
+
+            # Log the size of the response
+            response_data_size = len(response.get_data())
+            print(f"Response size: {response_data_size} bytes")
+            print("response = ",response)
+
+            return response
 
         except Exception as e:
             return jsonify({'error': str(e)}), 500
