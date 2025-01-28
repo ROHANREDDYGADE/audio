@@ -83,7 +83,6 @@ class ADPCMDecoder:
 
         return pcm_data
 
-
 def convert_adpcm_to_pcm(input_file_path):
     with open(input_file_path, 'rb') as f:
         # Read WAV header
@@ -96,7 +95,7 @@ def convert_adpcm_to_pcm(input_file_path):
     decoder = ADPCMDecoder()
     pcm_data = decoder.decode(adpcm_data)
     
-    # Create new WAV header for PCM format
+    # Create new WAV header for PCM format with 32kHz
     output_header = bytearray(44)
     output_header[0:4] = b'RIFF'
     output_header[8:12] = b'WAVE'
@@ -104,14 +103,15 @@ def convert_adpcm_to_pcm(input_file_path):
     output_header[16:20] = (16).to_bytes(4, 'little')  # Subchunk1Size
     output_header[20:22] = (1).to_bytes(2, 'little')   # AudioFormat (PCM)
     output_header[22:24] = (1).to_bytes(2, 'little')   # NumChannels
-    output_header[24:28] = (16000).to_bytes(4, 'little')  # SampleRate
-    output_header[28:32] = (32000).to_bytes(4, 'little')  # ByteRate
+    output_header[24:28] = (32000).to_bytes(4, 'little')  # SampleRate changed to 32kHz
+    output_header[28:32] = (64000).to_bytes(4, 'little')  # ByteRate (32000 * 1 * 2)
     output_header[32:34] = (2).to_bytes(2, 'little')    # BlockAlign
     output_header[34:36] = (16).to_bytes(2, 'little')   # BitsPerSample
     output_header[36:40] = b'data'
-    output_header[40:44] = len(pcm_data.tobytes()).to_bytes(4, 'little')  # Subchunk2Size
+    output_header[40:44] = len(pcm_data.tobytes()).to_bytes(4, 'little')
     
     return output_header + pcm_data.tobytes()
+
 model = whisper.load_model("base")
 
 @app.route('/upload', methods=['POST'])
